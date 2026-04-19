@@ -10,6 +10,6 @@ from a ramdisk. Multithreaded versions will be run with 8 worker threads
 (`-j 8`)\
 System spec: Ryzen 7 7800x3D and 32GB DDR5 Memory at 6000MT/s.
 
-| Time  | I/O  | Hashmap                     | Parsing                        | Notes                   |
-| :---: | :--- | :-------------------------- | :----------------------------- | :---------------------- |
-| 4.1 s | mmap | `std::collections::HashMap` | unaligned SWAR Integer parsing | Baseline Implementation |
+|  Time  | I/O  | Hashmap                     | Parsing                        | Notes                   |
+| :----: | :--- | :-------------------------- | :----------------------------- | :---------------------- |
+| 4.14 s | mmap | `std::collections::HashMap` | unaligned SWAR Integer parsing | Baseline Implementation |
