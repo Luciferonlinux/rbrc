@@ -1,6 +1,34 @@
 use log::{debug, info, trace};
 use std::{collections::HashMap, mem, ptr, slice, str};
 
+pub fn onebrc(data: &[u8], num_threads: usize) -> String {
+    let segments = segments(data, num_threads);
+
+    let mut db: HashMap<&str, Station> = HashMap::new();
+
+    std::thread::scope(|s| {
+        let mut thread_handles = Vec::with_capacity(segments.len());
+        for (i, segment) in segments.iter().enumerate() {
+            let handle = std::thread::Builder::new()
+                .name(format!("Worker [{:3}]", i))
+                .spawn_scoped(s, move || process_segment(data, *segment))
+                .unwrap();
+            thread_handles.push(handle);
+        }
+        for handle in thread_handles {
+            let part = handle.join().unwrap();
+            part.iter().for_each(|(k, v)| {
+                db.entry(k)
+                    .and_modify(|s| {
+                        s.merge(v);
+                    })
+                    .or_insert(*v);
+            });
+        }
+    });
+    calculate_outstring(db)
+}
+
 /// accumulates all measurements in segment in a Hashmap
 pub fn process_segment(data: &[u8], segment: Segment) -> HashMap<&str, Station> {
     const SEMICOLON_MASK: u64 = 0x3B3B3B3B3B3B3B3B;
@@ -270,8 +298,9 @@ fn debug_u64_bytes(word: u64, base_offset: usize) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::fs;
+    use std::io::prelude::*;
     use std::sync::Once;
+    use std::{fs, fs::File};
 
     static INIT: Once = Once::new();
 
@@ -281,7 +310,7 @@ mod tests {
             env_logger::Builder::new()
                 .target(env_logger::Target::Pipe(Box::new(log_file)))
                 .is_test(true)
-                .filter_level(log::LevelFilter::Info)
+                .filter_level(log::LevelFilter::Debug)
                 .format_timestamp(None)
                 .init();
         });
@@ -300,22 +329,17 @@ mod tests {
                     ".out"
                 ))
                 .unwrap();
-                let mut measurements_file = fs::read(concat!(
+                let mut measurements_file = fs::File::open(concat!(
                     "resources/samples/",
                     stringify!($sample_name),
                     ".txt"
                 ))
                 .unwrap();
-                measurements_file.append(&mut padding);
+                let mut measurements_data: Vec<u8> = Vec::with_capacity(measurements_file.metadata().unwrap().len() as usize + 8);
+                measurements_file.read_to_end(&mut measurements_data);
+                measurements_data.append(&mut padding);
 
-                let db = process_segment(
-                    &measurements_file,
-                    Segment {
-                        start: 0,
-                        end: measurements_file.len() - padding_len,
-                    },
-                );
-                let res = calculate_outstring(db);
+                let res = onebrc(&measurements_data[..measurements_data.len()-8], 1);
                 let correct_file_str = String::from_utf8(correct_file).unwrap();
                 assert_eq!(correct_file_str, res);
             })+};
