@@ -18,5 +18,13 @@ env_logger = "0.11.10"
 name = "rbrc_benchmarks"
 harness = false
 
+[lib]
+bench = false
+
+[[bin]]
+name = "rbrc_calc"
+path = "src/main.rs"
+bench = false
+
 [profile.release]
 debug = 0
