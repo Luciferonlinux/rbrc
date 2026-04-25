@@ -9,6 +9,7 @@ Times are measured using the `criterion` crate and the file is served from a
 ramdisk. Multithreaded versions will be run with 8 worker threads (`-j 8`)\
 System spec: Ryzen 7 7800x3D and 32GB DDR5 Memory at 6000MT/s.
 
-| Classic | 10k Keys | I/O  | Hashmap                     | Notes                   |
-| :-----: | :------: | :--- | :-------------------------- | :---------------------- |
-| 3.34 s  |  3.80 s  | mmap | `std::collections::HashMap` | Baseline Implementation |
+| Classic | 10k Keys | I/O  | Hashmap                                               | Notes                   |
+| :-----: | :------: | :--- | :---------------------------------------------------- | :---------------------- |
+| 3.34 s  |  3.80 s  | mmap | `std::collections::HashMap`                           | Baseline Implementation |
+| 1.81 s  |  2.28 s  | mmap | `hashbrown::Hashmap` with `rustc_hash::FxHashBuilder` |                         |

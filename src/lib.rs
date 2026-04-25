@@ -1,10 +1,12 @@
+use hashbrown::{HashMap, hash_map::RawEntryMut};
 use log::{debug, info, trace};
-use std::{collections::HashMap, mem, ptr, slice, str};
+use rustc_hash::FxBuildHasher;
+use std::{mem, ptr, slice, str};
 
 pub fn onebrc(data: &[u8], num_threads: usize) -> String {
     let segments = segments(data, num_threads);
 
-    let mut db: HashMap<&str, Station> = HashMap::new();
+    let mut db: HashMap<&str, Station, FxBuildHasher> = HashMap::default();
 
     std::thread::scope(|s| {
         let mut thread_handles = Vec::with_capacity(segments.len());
@@ -18,22 +20,27 @@ pub fn onebrc(data: &[u8], num_threads: usize) -> String {
         for handle in thread_handles {
             let part = handle.join().unwrap();
             part.iter().for_each(|(k, v)| {
-                db.entry(k)
-                    .and_modify(|s| {
-                        s.merge(v);
-                    })
-                    .or_insert(*v);
+                let entry = db.raw_entry_mut().from_key(k);
+                match entry {
+                    RawEntryMut::Occupied(mut o) => {
+                        o.get_mut().merge(v);
+                    }
+                    RawEntryMut::Vacant(x) => {
+                        x.insert(k, *v);
+                    }
+                }
             });
         }
     });
+
     calculate_outstring(db)
 }
 
 /// accumulates all measurements in segment in a Hashmap
-pub fn process_segment(data: &[u8], segment: Segment) -> HashMap<&str, Station> {
+pub fn process_segment(data: &[u8], segment: Segment) -> HashMap<&str, Station, FxBuildHasher> {
     const SEMICOLON_MASK: u64 = 0x3B3B3B3B3B3B3B3B;
     // Initialization
-    let mut db: HashMap<&str, Station> = HashMap::new();
+    let mut db: HashMap<&str, Station, FxBuildHasher> = HashMap::default();
     let mut read_offset = segment.start;
     let mut line_beginning = segment.start;
 
@@ -112,9 +119,15 @@ pub fn process_segment(data: &[u8], segment: Segment) -> HashMap<&str, Station> 
         );
 
         // make db entry
-        db.entry(station_name)
-            .and_modify(|s| s.update(temp))
-            .or_insert(Station::new(temp));
+        let entry = db.raw_entry_mut().from_key(station_name);
+        match entry {
+            RawEntryMut::Occupied(mut o) => {
+                o.get_mut().update(temp);
+            }
+            RawEntryMut::Vacant(v) => {
+                v.insert(station_name, Station::new(temp));
+            }
+        }
 
         line_beginning = read_offset + separator_pos + temp_tup.1 + 1; // temp_tup.1 = next line start
         debug!(
@@ -177,7 +190,7 @@ pub fn find_separator(segment: u64, separator_mask: u64) -> usize {
 
 /// calculates min/mean/max from data in the HashMap and returns the String with format:
 /// {station_name=min/mean/max, ...}
-pub fn calculate_outstring(db: HashMap<&str, Station>) -> String {
+pub fn calculate_outstring(db: HashMap<&str, Station, FxBuildHasher>) -> String {
     let mut out_string: String = '{'.to_string();
     let mut ordered = db.into_iter().collect::<Vec<(&str, Station)>>();
     ordered.sort_by(|a, b| a.0.cmp(b.0));

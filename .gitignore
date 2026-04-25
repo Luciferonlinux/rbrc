@@ -3,3 +3,4 @@
 /logs
 perf.*
 flamegraph.svg
+*.sh
